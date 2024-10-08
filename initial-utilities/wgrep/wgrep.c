@@ -37,8 +37,8 @@ int main(int argc, char* argv[])
 				exit(1);
 			}
 			grep(search, in);
+			fclose(in);
 		}
-		fclose(in);
 	}
 }
 	
