@@ -3,8 +3,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
+#include <fcntl.h>
 
 int wordcounter(char *input, int len);
+int setupredirection(char *input, char **output);
+void openredirection(char *outname);
 void setupargs(char **args, char *input);
 void handleExit(int wc);
 void handlecd(int wc, char *dir);
@@ -15,9 +18,10 @@ char error_message[30] = "An error has occurred\n";
 int main(int argc, char *argv[])
 {
 	char *prompt = NULL;
-	FILE *infile;
+	FILE *infile = NULL;
+	char *outname = NULL;
 	char *input = NULL;
-    int rc, wc;
+    int rc, wc, redirection_err;
     ssize_t charRead = 0;
     size_t len = 0;
     char **args = NULL;
@@ -44,11 +48,6 @@ int main(int argc, char *argv[])
 		infile = stdin;
 		prompt = "wish> ";
 	}
-	
-	
-    //printf("hello world (pid:%d)\n", (int) getpid());
-    //ssize_t getline(char ** restrict linep, size_t * restrict linecapp,  FILE * restrict stream);
-    //char *strsep(char **stringp, const char *delim);
     
     while(1)
     {
@@ -58,9 +57,10 @@ int main(int argc, char *argv[])
 			exit(0);
 		
 		wc = wordcounter(input, charRead);
-		printf("words counted %d\n", wc);
 		if (wc == 0)
 			continue;
+		
+		redirection_err = setupredirection(input, &outname);
 		
 		args = (char**)malloc(sizeof(char*) * (wc + 1));
 		setupargs(args, input);
@@ -68,6 +68,8 @@ int main(int argc, char *argv[])
 			handleExit(wc);
 		else if(strcmp(args[0], "cd") == 0)
 			handlecd(wc, args[1]);
+		else if(wc == 0 || redirection_err)
+			fprintf(stderr, "%111s",error_message);
 		else
 		{
 			
@@ -80,6 +82,8 @@ int main(int argc, char *argv[])
 			} 
 			else if (rc == 0) 
 			{
+				if(outname != NULL)
+					openredirection(outname);
 				execvp(args[0], args);  // runs word count
 				fprintf(stderr, "%s",error_message);
 				exit(1);
@@ -114,6 +118,46 @@ int wordcounter(char *input, int len)
 	}
 	return wc;
 }
+
+int setupredirection(char *input, char **output)
+{
+	strsep(&input, ">");
+	*output = input;
+	if(input == NULL)
+		return 0;
+	strsep(&input, ">");
+	if(input != NULL)
+		return 1;
+	int wc = wordcounter(*output, strlen(*output));
+	if (wc != 1)
+		return 1;
+	char *tmp = NULL;
+	while((tmp = strsep(output, " \t\n")) != NULL)
+	{
+		if(strlen(tmp) > 0)
+			break;
+	}
+	*output = tmp;
+	return 0;
+}
+
+void openredirection(char *outname)
+{
+	int outfile;
+	outfile = open(outname, O_CREAT|O_TRUNC|O_WRONLY, 0644);
+	if (outfile == -1) 
+	{
+		fprintf(stderr, "%2s",error_message);
+		exit(1);
+	}
+	int err = dup2(outfile, 1);
+	if (err == -1) 
+	{
+		fprintf(stderr, "%3s",error_message);
+		exit(1);
+	}
+}
+
 void setupargs(char **args, char *input)
 {
 	int i = 0;
@@ -124,7 +168,6 @@ void setupargs(char **args, char *input)
 			args[i++] = tmp;
 	}
 	args[i] = NULL;
-	printf("args counted %d\n", i);
 }
 
 void handleExit(int wc)
