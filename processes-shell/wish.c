@@ -14,18 +14,45 @@ char error_message[30] = "An error has occurred\n";
 
 int main(int argc, char *argv[])
 {
-
-    //printf("hello world (pid:%d)\n", (int) getpid());
-    //ssize_t getline(char ** restrict linep, size_t * restrict linecapp,  FILE * restrict stream);
-    //char *strsep(char **stringp, const char *delim);
-    char *input = NULL;
+	char *prompt = NULL;
+	FILE *infile;
+	char *input = NULL;
     int rc, wc;
     ssize_t charRead = 0;
     size_t len = 0;
     char **args = NULL;
+    
+    if (argc > 2)
+    {
+		fprintf(stderr, "%s",error_message);
+		exit(1);
+	}
+        
+	if (argc == 2)
+    {
+		/* Try to open a file */
+		infile = fopen(argv[1], "r");
+		if (infile == NULL) 
+		{
+			fprintf(stderr, "%s",error_message);
+			exit(1);
+		}
+		prompt = "";
+	}
+	else
+	{
+		infile = stdin;
+		prompt = "wish> ";
+	}
+	
+	
+    //printf("hello world (pid:%d)\n", (int) getpid());
+    //ssize_t getline(char ** restrict linep, size_t * restrict linecapp,  FILE * restrict stream);
+    //char *strsep(char **stringp, const char *delim);
+    
     while(1)
     {
-		printf("wish>");
+		fprintf(stdout, "%s", prompt);
 		charRead = getline(&input, &len, stdin);
 		if(charRead < 0)
 			exit(0);
