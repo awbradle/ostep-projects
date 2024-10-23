@@ -4,6 +4,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <sys/wait.h>
 
 int wordcounter(char *input, int len);
 int setupredirection(char *input, char **output);
@@ -23,7 +24,9 @@ int main(int argc, char *argv[])
 	int batchMode = 0;
 	char *outname = NULL;
 	char *input = NULL;
+	char *inputPiece = NULL;
     int rc, wc, redirectionErr;
+    int pid = 0;
     ssize_t charRead = 0;
     size_t len = 0;
     char **args = NULL;
@@ -32,7 +35,7 @@ int main(int argc, char *argv[])
     path[0] = (char*) malloc(sizeof(char) * 5);
     snprintf(path[0],sizeof(path[0]), "/bin");
     path[1] = NULL;
-    
+    rc = -1;
     if (argc > 2)
     {
 		fprintf(stderr, "%s",error_message);
@@ -62,15 +65,40 @@ int main(int argc, char *argv[])
 		charRead = getline(&input, &len, infile);
 		if(charRead < 0)
 			exit(0);
-		
-		wc = wordcounter(input, charRead);
+			
+		inputPiece = input;
+		while(strchr(input, '&') != NULL)
+		{
+			inputPiece = strsep(&input, "&");
+			rc = fork();
+			if (rc < 0) 
+			{
+				// fork failed; exit
+				fprintf(stderr, "fork failed\n");
+				exit(1);
+			}
+			if(rc == 0)
+				break;
+		}
+		if (rc != 0)
+			inputPiece = strsep(&input, "&");
+		wc = wordcounter(inputPiece, strlen(inputPiece));
 		if (wc == 0)
+		{
+			if(rc == 0)
+				exit(0);
+			pid = 0;
+			while(pid != -1)
+			{
+				pid = wait(NULL);
+			}
 			continue;
+		}
 		
-		redirectionErr = setupredirection(input, &outname);
+		redirectionErr = setupredirection(inputPiece, &outname);
 		
 		args = (char**)malloc(sizeof(char*) * (wc + 1));
-		setupargs(args, input);
+		setupargs(args, inputPiece);
 		
 		if(redirectionErr || args[0] == NULL)
 			fprintf(stderr, "%s",error_message);
@@ -82,7 +110,8 @@ int main(int argc, char *argv[])
 			handlepath(wc, args);
 		else
 		{
-			rc = fork();
+			if (rc != 0)
+				rc = fork();
 			if (rc < 0) 
 			{
 				// fork failed; exit
@@ -106,10 +135,16 @@ int main(int argc, char *argv[])
 			else 
 			{
 				// parent goes down this path (original process)
-				waitpid(rc, NULL, 0);
+				pid = 0;
+				while(pid != -1)
+				{
+					pid = wait(NULL);
+				}	
 			}
 		}
     	free(args);
+    	if(rc == 0)
+    		exit(0);
     }
     return 0;
 }
