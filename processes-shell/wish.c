@@ -11,20 +11,27 @@ void openredirection(char *outname);
 void setupargs(char **args, char *input);
 void handleExit(int wc);
 void handlecd(int wc, char *dir);
-
-
+void handlepath(int wc, char **args);
+char* getAccessPath(char *prog);
+ 
 char error_message[30] = "An error has occurred\n";
+char **path = NULL;
 
 int main(int argc, char *argv[])
 {
-	char *prompt = NULL;
 	FILE *infile = NULL;
+	int batchMode = 0;
 	char *outname = NULL;
 	char *input = NULL;
-    int rc, wc, redirection_err;
+    int rc, wc, redirectionErr;
     ssize_t charRead = 0;
     size_t len = 0;
     char **args = NULL;
+    
+    path = (char**) malloc(sizeof(char*));
+    path[0] = (char*) malloc(sizeof(char) * 5);
+    snprintf(path[0],sizeof(path[0]), "/bin");
+    path[1] = NULL;
     
     if (argc > 2)
     {
@@ -41,18 +48,18 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "%s",error_message);
 			exit(1);
 		}
-		prompt = "";
+		batchMode = 1;
 	}
 	else
 	{
 		infile = stdin;
-		prompt = "wish> ";
 	}
     
     while(1)
     {
-		fprintf(stdout, "%s", prompt);
-		charRead = getline(&input, &len, stdin);
+		if(!batchMode)
+			fprintf(stdout, "wish> ");
+		charRead = getline(&input, &len, infile);
 		if(charRead < 0)
 			exit(0);
 		
@@ -60,19 +67,21 @@ int main(int argc, char *argv[])
 		if (wc == 0)
 			continue;
 		
-		redirection_err = setupredirection(input, &outname);
+		redirectionErr = setupredirection(input, &outname);
 		
 		args = (char**)malloc(sizeof(char*) * (wc + 1));
 		setupargs(args, input);
-		if(strcmp(args[0], "exit") == 0)
+		
+		if(redirectionErr || args[0] == NULL)
+			fprintf(stderr, "%s",error_message);
+		else if(strcmp(args[0], "exit") == 0)
 			handleExit(wc);
 		else if(strcmp(args[0], "cd") == 0)
 			handlecd(wc, args[1]);
-		else if(wc == 0 || redirection_err)
-			fprintf(stderr, "%111s",error_message);
+		else if(strcmp(args[0], "path") == 0)
+			handlepath(wc, args);
 		else
 		{
-			
 			rc = fork();
 			if (rc < 0) 
 			{
@@ -84,7 +93,13 @@ int main(int argc, char *argv[])
 			{
 				if(outname != NULL)
 					openredirection(outname);
-				execvp(args[0], args);  // runs word count
+				char *progPath = getAccessPath(args[0]);
+				if(progPath == NULL)
+				{
+					fprintf(stderr, "%s",error_message);
+					exit(1);
+				}
+				execvp(progPath, args);  // runs word count
 				fprintf(stderr, "%s",error_message);
 				exit(1);
 			} 
@@ -188,4 +203,42 @@ void handlecd(int wc, char *dir)
 		fprintf(stderr, "%s",error_message);
 }
 
+void handlepath(int wc, char **args)
+{
+	int i = 0;
+	while(path[i] != NULL)
+	{
+		free(path[i++]);
+	}
+	free(path);
 
+	path = (char**) malloc(sizeof(char*) * wc);
+	i = 0;
+	while(args[i+1] != NULL) 
+	{
+		asprintf(&path[i], "%s", args[i+1]);
+		i++;
+	}
+	path[i] = NULL;
+	i = 0;
+}
+
+char* getAccessPath(char *prog)
+{
+	int i = 0;
+	char *progPath = NULL;
+	if (path[0] == NULL)
+		return NULL;
+	
+	while(path[i] != NULL)
+	{
+		if(progPath != NULL)
+			free(progPath);
+		asprintf(&progPath, "%s/%s", path[i], prog);
+		if(access(progPath, X_OK) == 0)
+			return progPath;
+		i++;
+	}
+	free(progPath);
+	return NULL;
+}
