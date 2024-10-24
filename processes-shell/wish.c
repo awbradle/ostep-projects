@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
     size_t len = 0;
     char **args = NULL;
     
-    path = (char**) malloc(sizeof(char*));
+    path = (char**) malloc(sizeof(char*) * 2);
     path[0] = (char*) malloc(sizeof(char) * 5);
     snprintf(path[0],sizeof(path[0]), "/bin");
     path[1] = NULL;
