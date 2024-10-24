@@ -24,6 +24,7 @@ int main(int argc, char *argv[])
 	int batchMode = 0;
 	char *outname = NULL;
 	char *input = NULL;
+	char *iptr = NULL;
 	char *inputPiece = NULL;
     int rc, wc, redirectionErr;
     int pid = 0;
@@ -62,7 +63,14 @@ int main(int argc, char *argv[])
     {
 		if(!batchMode)
 			fprintf(stdout, "wish> ");
+		if(iptr != NULL)
+		{
+			input = NULL;
+			len = 0;
+			free(iptr);
+		}
 		charRead = getline(&input, &len, infile);
+		iptr = input;
 		if(charRead < 0)
 			exit(0);
 			
